@@ -163,6 +163,28 @@ class Account:
         return result is None
 
     @staticmethod
+    def update_account_balance(UserId, amount):
+        #Updates the balance of the account associated with the given username.
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        try:
+            # Update the account balance
+            cursor.execute("""
+                UPDATE Account SET balance = balance + ? WHERE id = ?
+            """, (amount, UserId))
+
+            if cursor.rowcount == 0:  # No account was updated
+                return {"success": False, "message": "User not found."}
+
+            conn.commit()
+        except sqlite3.Error as e:
+            return {"success": False, "message": str(e)}
+        finally:
+            conn.close()
+
+        return {"success": True}
+    
+    @staticmethod
     def deposit(user_id, amount):
         if amount <= 0:
             return "Deposit amount must be greater than zero."
@@ -180,6 +202,124 @@ class Account:
             conn.commit()
             Account.log_transaction("Deposit", amount, None, user_id)
             return "Deposit successful."
+        except sqlite3.Error as e:
+            return f"Error: {str(e)}"
+        finally:
+            conn.close()
+    
+    @staticmethod
+    def log_transaction(transaction_type, amount, sender_id, recipient_id):
+        """
+        Logs a transaction to the Transactions table.
+
+        Parameters:
+        - transaction_type: Type of the transaction (e.g., "Transfer").
+        - amount: Amount of the transaction.
+        - sender_id: ID of the sender account.
+        - recipient_id: ID of the recipient account.
+        """
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO Transactions (type, date, amount, state, sender, recipient)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (transaction_type, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), amount, "Completed", sender_id, recipient_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+## Hana Nazmy---------------            
+    @staticmethod
+    def update_currency_type(user_id, currency_type):
+        """Updates the currency type for a specific account."""
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE Account SET currency_type = ? WHERE id = ?
+            """, (currency_type, user_id))
+
+            if cursor.rowcount == 0:
+                return {"success": False, "message": "User not found."}
+
+            conn.commit()
+        except sqlite3.Error as e:
+            return {"success": False, "message": str(e)}
+        finally:
+            conn.close()
+
+        return {"success": True}
+
+    @staticmethod
+    def get_account_currency(user_id):
+        """Gets the currency type for a specific account."""
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT currency_type FROM Account WHERE id = ?", (user_id,))
+        result = cursor.fetchone()
+        conn.close()    
+            
+# Mohamed Alsaeed
+    @staticmethod
+    def view_account_balance(user_id):
+        """Returns the current balance for a specific account."""
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT balance FROM Account WHERE id = ?", (user_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+        finally:
+            conn.close()
+        
+    @staticmethod
+    def deposit(user_id, amount):
+        if amount <= 0:
+            return "Deposit amount must be greater than zero."
+
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE Account SET balance = balance + ? WHERE id = ?
+            """, (amount, user_id))
+
+            if cursor.rowcount == 0:
+                return "Account not found."
+
+            conn.commit()
+            Account.log_transaction("Deposit", amount, None, user_id)
+            return "Deposit successful."
+        except sqlite3.Error as e:
+            return f"Error: {str(e)}"
+        finally:
+            conn.close()
+
+    @staticmethod
+    def withdraw(user_id, amount):
+        if amount <= 0:
+            return "Withdrawal amount must be greater than zero."
+
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT balance FROM Account WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            if not row:
+                return "Account not found."
+
+            current_balance = row[0]
+            if current_balance < amount:
+                return "Insufficient balance."
+
+            cursor.execute("""
+                UPDATE Account SET balance = balance - ? WHERE id = ?
+            """, (amount, user_id))
+
+            conn.commit()
+            Account.log_transaction("Withdraw", amount, user_id, None)
+            return "Withdrawal successful."
         except sqlite3.Error as e:
             return f"Error: {str(e)}"
         finally:
@@ -207,3 +347,24 @@ class Donation:
             return False, f"Error: {str(e)}"
         finally:
             conn.close()
+## Hana Nazmy
+class Currency:
+    @staticmethod
+    def get_all_currencies():
+        #Fetches all available currencies from the database.
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM Currency")
+        currencies = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        return currencies
+    
+    @staticmethod
+    def get_conversion_rate(currency_name):
+        #Fetches the conversion rate of a specific currency.
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT conversion_rate_to_egp FROM Currency WHERE name = ?", (currency_name,))
+        rate_row = cursor.fetchone()
+        conn.close()
+        return rate_row[0] if rate_row else None
